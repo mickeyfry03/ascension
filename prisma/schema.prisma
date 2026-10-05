@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  REQUESTER
+  SUPPORTER
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  IN_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum NeedCategory {
+  HOUSING
+  FOOD
+  MEDICAL
+  TRANSPORT
+  EDUCATION
+  OTHER
+}
+
+enum SupportStatus {
+  PLEDGED
+  COMPLETED
+  CANCELED
+}
+
+model User {
+  id             String               @id @default(cuid())
+  name           String?
+  email          String               @unique
+  emailVerified  DateTime?
+  image          String?
+  role           Role                 @default(REQUESTER)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  requests       HelpRequest[]
+  supportActions SupportAction[]
+  reviews        VerificationReview[]
+  accounts       Account[]
+  sessions       Session[]
+}
+
+// Auth.js (NextAuth) compatible tables so the Prisma adapter works out of the box.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model HelpRequest {
+  id             String               @id @default(cuid())
+  title          String
+  story          String
+  category       NeedCategory
+  location       String
+  amountCents    Int
+  raisedCents    Int                  @default(0)
+  status         VerificationStatus   @default(PENDING)
+  requesterId    String?
+  requesterName  String
+  requesterEmail String
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  verifiedAt     DateTime?
+  requester      User?                @relation(fields: [requesterId], references: [id])
+  reviews        VerificationReview[]
+  supportActions SupportAction[]
+
+  @@index([status, createdAt])
+}
+
+model VerificationReview {
+  id         String             @id @default(cuid())
+  requestId  String
+  reviewerId String?
+  decision   VerificationStatus
+  notes      String?
+  createdAt  DateTime           @default(now())
+  request    HelpRequest        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  reviewer   User?              @relation(fields: [reviewerId], references: [id])
+}
+
+model SupportAction {
+  id          String        @id @default(cuid())
+  requestId   String
+  supporterId String?
+  donorName   String
+  amountCents Int
+  message     String?
+  status      SupportStatus @default(PLEDGED)
+  createdAt   DateTime      @default(now())
+  request     HelpRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  supporter   User?         @relation(fields: [supporterId], references: [id])
+
+  @@index([requestId])
+}
